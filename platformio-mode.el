@@ -36,7 +36,6 @@
 (require 'json)
 (require 'async)
 (require 'seq)
-(require 'projectile)
 (require 'compile)
 
 ;;; Customization
@@ -82,24 +81,28 @@
 ;;;###autoload
 (defun platformio-conditionally-enable ()
   "Enable `platformio-mode' only when a `platformio.ini' file is present in project root."
-  (condition-case nil
-      (when (projectile-verify-file "platformio.ini")
-        (platformio-mode 1))
-    (error nil)))
-
+  (ignore-errors
+    (let* ((ini "platformio.ini")
+	         (files (project-files (project-current t)))
+	         (match (string-match-p ini (format "%s" files))))
+	    (when match
+	      (platformio-mode 1)))))
 
 ;;; Internal functions
 (defun platformio--exec (target)
   "Call `platformio ... TARGET' in the root of the project."
-  (let ((default-directory (projectile-project-root))
-        (cmd (concat "platformio -f -c emacs " target)))
+  (let* ((project (project-current t))
+	 (default-directory (project-root project))
+	 (buffers (project-buffers project))
+         (cmd (concat "platformio -f -c emacs " target)))
     (unless default-directory
-      (user-error "Not in a projectile project, aborting"))
+      (user-error "Not in a project, aborting"))
     (save-some-buffers (not compilation-ask-about-save)
                        (lambda ()
-                         (projectile-project-buffer-p (current-buffer)
-                                                      default-directory)))
+                         (when (member (current-buffer) buffers)
+			   t)))
     (compilation-start cmd 'platformio-compilation-mode)))
+
 
 (defun platformio--silent-arg ()
   "Return command line argument to make things silent."
